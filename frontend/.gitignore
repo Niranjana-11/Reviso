@@ -2,21 +2,20 @@
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 .env
 .venv/
 venv/
-uploads/
-outputs/
+
+# Uploads and outputs
+backend/uploads/
+backend/outputs/
 
 # Node
 node_modules/
 dist/
 .env.local
-.env.production
 
-# VS Code
-.vscode/
-
-# OS files
+# OS
 .DS_Store
 Thumbs.db
