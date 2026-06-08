@@ -1,15 +1,39 @@
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000"
 
-async function req(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, opts)
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail ?? `Server error ${res.status}`)
+// Wake up Render by pinging it first
+export async function wakeUpBackend() {
+  try {
+    await fetch(`${BASE}/`, { method: "GET" })
+  } catch {
+    // ignore — just trying to wake it up
   }
-  return res
 }
 
-// Upload one file at a time — called per file
+async function req(path, opts = {}, retries = 2) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(`${BASE}${path}`, opts)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail ?? `Server error ${res.status}`)
+      }
+      return res
+    } catch (e) {
+      const isLastAttempt = attempt === retries
+      const isFetchError = e.message === "Failed to fetch"
+        || e.message.includes("fetch")
+        || e.message.includes("network")
+
+      if (isFetchError && !isLastAttempt) {
+        // Wait 30 seconds then retry — Render is waking up
+        await new Promise(r => setTimeout(r, 30000))
+        continue
+      }
+      throw e
+    }
+  }
+}
+
 export const uploadNotes = (file) => {
   const f = new FormData()
   f.append("file", file)
@@ -22,7 +46,6 @@ export const uploadQP = (file) => {
   return req("/upload/qp", { method: "POST", body: f }).then(r => r.json())
 }
 
-// Generate — sends arrays of filenames
 export const generateQPAnswers = (notesFiles, qpFiles) =>
   req("/generate/qp-answers", {
     method: "POST",
@@ -34,12 +57,7 @@ export const generatePossible = (notesFiles, difficulty, marks, count) =>
   req("/generate/possible-questions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      notes_files: notesFiles,
-      difficulty,
-      marks,
-      count,        // ← add this
-    }),
+    body: JSON.stringify({ notes_files: notesFiles, difficulty, marks, count }),
   }).then(r => r.json())
 
 export const downloadPDF = async (items, title, mode) => {
@@ -49,9 +67,9 @@ export const downloadPDF = async (items, title, mode) => {
     body: JSON.stringify({ items, title, mode }),
   })
   const blob = await res.blob()
-  const url  = URL.createObjectURL(blob)
-  const a    = document.createElement("a")
-  a.href     = url
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
   a.download = "reviso_sheet.pdf"
   a.click()
   URL.revokeObjectURL(url)

@@ -1,8 +1,8 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import {
   uploadNotes, uploadQP,
   generateQPAnswers, generatePossible,
-  downloadPDF,
+  downloadPDF, wakeUpBackend,
 } from "../utils/api"
 import { saveSession } from "../utils/supabase"
 
@@ -18,12 +18,12 @@ export function useReviso() {
   // ── Mode B controls ───────────────────────────────────────────────────────
   const [difficulty, setDifficulty] = useState("medium")
   const [marks,      setMarks]      = useState(3)
-  const [count,      setCount]      = useState(1)    // number of questions
+  const [count,      setCount]      = useState(1)
 
   // ── Results ───────────────────────────────────────────────────────────────
   const [items,      setItems]      = useState([])
-  const [selected,   setSelected]   = useState({})  // { id: bool }
-  const [mode,       setMode]       = useState(null) // "qp" | "generated"
+  const [selected,   setSelected]   = useState({})
+  const [mode,       setMode]       = useState(null)
   const [generating, setGenerating] = useState(false)
   const [exporting,  setExporting]  = useState(false)
 
@@ -31,6 +31,11 @@ export function useReviso() {
   const [step,  setStep]  = useState(1)
   const [error, setError] = useState("")
   const [title, setTitle] = useState("Reviso Study Sheet")
+
+  // ── Wake up Render as soon as app loads ───────────────────────────────────
+  useEffect(() => {
+    wakeUpBackend()
+  }, [])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const showError  = (msg) => setError(msg)
@@ -50,7 +55,6 @@ export function useReviso() {
     for (const file of valid) {
       try {
         const data = await uploadNotes(file)
-        // Avoid duplicates
         setNotesFiles(prev => {
           if (prev.find(f => f.filename === data.filename)) return prev
           return [...prev, {
@@ -59,7 +63,11 @@ export function useReviso() {
           }]
         })
       } catch (e) {
-        showError(`Failed to upload ${file.name}: ${e.message}`)
+        if (e.message.includes("fetch")) {
+          showError("Server is waking up ☕ — retrying automatically, please wait...")
+        } else {
+          showError(`Failed to upload ${file.name}: ${e.message}`)
+        }
       }
     }
 
@@ -80,7 +88,6 @@ export function useReviso() {
     for (const file of valid) {
       try {
         const data = await uploadQP(file)
-        // Avoid duplicates
         setQpFiles(prev => {
           if (prev.find(f => f.filename === data.filename)) return prev
           return [...prev, {
@@ -89,7 +96,11 @@ export function useReviso() {
           }]
         })
       } catch (e) {
-        showError(`Failed to upload ${file.name}: ${e.message}`)
+        if (e.message.includes("fetch")) {
+          showError("Server is waking up ☕ — retrying automatically, please wait...")
+        } else {
+          showError(`Failed to upload ${file.name}: ${e.message}`)
+        }
       }
     }
 
@@ -152,7 +163,11 @@ export function useReviso() {
       })
 
     } catch (e) {
-      showError(e.message)
+      if (e.message.includes("fetch")) {
+        showError("Server is waking up ☕ — please wait 30 seconds and try again!")
+      } else {
+        showError(e.message)
+      }
       setStep(1)
     }
 
@@ -182,7 +197,11 @@ export function useReviso() {
     try {
       await downloadPDF(chosen, title, mode)
     } catch (e) {
-      showError(e.message)
+      if (e.message.includes("fetch")) {
+        showError("Server is waking up ☕ — please wait 30 seconds and try again!")
+      } else {
+        showError(e.message)
+      }
     }
     setExporting(false)
   }, [items, selected, title, mode])
@@ -190,7 +209,7 @@ export function useReviso() {
   // ── Derived ───────────────────────────────────────────────────────────────
   const selectedCount = Object.values(selected).filter(Boolean).length
 
-  // ── Return everything components need ─────────────────────────────────────
+  // ── Return everything ─────────────────────────────────────────────────────
   return {
     // Files
     notesFiles, qpFiles,
