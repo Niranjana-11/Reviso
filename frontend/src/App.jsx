@@ -181,7 +181,7 @@ export default function App() {
             fontSize: 13, color: "var(--text-body)",
             marginBottom: 16, marginTop: 4,
           }}>
-            Powered by <strong>Groq Llama 3</strong> — free and extremely fast.
+            Generate questions and answers using the power of Reviso 🤖. This may take a minute, so feel free to make a cup of tea ☕
           </p>
           <button
             className="btn btn-blue"
