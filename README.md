@@ -54,6 +54,8 @@
 ---
 
 ## 📁 Project Structure
+
+```
 Reviso/
 ├── backend/
 │   ├── main.py                  # FastAPI routes
@@ -63,7 +65,7 @@ Reviso/
 │       ├── pdf_extractor.py     # Extract text from PDFs
 │       ├── qa_engine.py         # Groq AI — two modes
 │       ├── pdf_builder.py       # ReportLab PDF output
-│       └── pptx_converter.py    # PPTX → PDF conversion
+│       └── pptx_converter.py   # PPTX → PDF conversion
 ├── frontend/
 │   ├── src/
 │   │   ├── App.jsx              # Main UI
@@ -85,6 +87,7 @@ Reviso/
 │   └── vite.config.js
 ├── .gitignore
 └── README.md
+```
 
 ---
 
