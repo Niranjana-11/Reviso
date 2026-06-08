@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pathlib import Path
 from dotenv import load_dotenv
-from typing import List
 import uvicorn
+import re
 
 load_dotenv()
 
@@ -31,12 +31,26 @@ Path("outputs").mkdir(exist_ok=True)
 def _is_pdf(filename: str) -> bool:
     return filename.lower().endswith(".pdf")
 
+
 def _is_pptx(filename: str) -> bool:
     return filename.lower().endswith(".pptx")
 
+
+def _safe_name(name: str) -> str:
+    """Make filename safe — same logic as storage.py."""
+    return re.sub(r"[^\w\-.]", "_", name)
+
+
 def _ensure_pdf(kind: str, filename: str, raw_path: str) -> tuple[str, str]:
+    """
+    If uploaded file is PPTX, convert it to PDF automatically.
+    Returns (final_filename, final_path) — always a PDF.
+    Uses safe filename to avoid issues with spaces and brackets.
+    """
     if _is_pptx(filename):
-        pdf_filename = Path(filename).stem + ".pdf"
+        # Make a safe PDF filename from the PPTX stem
+        safe_stem   = _safe_name(Path(filename).stem)
+        pdf_filename = safe_stem + ".pdf"
         pdf_path     = str(Path("uploads") / f"{kind}_{pdf_filename}")
         pptx_to_pdf(raw_path, pdf_path)
         return pdf_filename, pdf_path
@@ -50,47 +64,65 @@ def health():
     return {"status": "ok", "app": "Reviso v2"}
 
 
-# ── Upload single file (called once per file) ─────────────────────────────────
+# ── Upload notes ──────────────────────────────────────────────────────────────
 
 @app.post("/upload/notes")
 async def upload_notes(file: UploadFile = File(...)):
     if not _is_pdf(file.filename) and not _is_pptx(file.filename):
-        raise HTTPException(400, "Only PDF or PPTX files accepted.")
+        raise HTTPException(400, "Only PDF or PPTX files are accepted.")
+
     raw_path = await save_upload("notes", file)
+
+    # Auto-convert PPTX → PDF
     final_name, final_path = _ensure_pdf("notes", file.filename, raw_path)
+
     text = extract_text(final_path)
     if len(text.strip()) < 50:
-        raise HTTPException(422, "Could not extract text. Make sure it is not a scanned image.")
+        raise HTTPException(
+            422,
+            "Could not read text from your file. "
+            "Make sure it is not a scanned image."
+        )
+
     return {
-        "ok": True,
-        "filename": final_name,
+        "ok":        True,
+        "filename":  _safe_name(final_name),  # ← always return safe name
         "converted": _is_pptx(file.filename),
-        "chars": len(text),
+        "chars":     len(text),
     }
 
+# ── Upload QP ─────────────────────────────────────────────────────────────────
 
 @app.post("/upload/qp")
 async def upload_qp(file: UploadFile = File(...)):
     if not _is_pdf(file.filename) and not _is_pptx(file.filename):
-        raise HTTPException(400, "Only PDF or PPTX files accepted.")
+        raise HTTPException(400, "Only PDF or PPTX files are accepted.")
+
     raw_path = await save_upload("qp", file)
+
+    # Auto-convert PPTX → PDF
     final_name, final_path = _ensure_pdf("qp", file.filename, raw_path)
+
     text = extract_text(final_path)
     if len(text.strip()) < 30:
-        raise HTTPException(422, "Could not extract text from question paper.")
+        raise HTTPException(
+            422,
+            "Could not read text from the question paper."
+        )
+
     return {
-        "ok": True,
-        "filename": final_name,
+        "ok":        True,
+        "filename":  _safe_name(final_name),  # ← always return safe name
         "converted": _is_pptx(file.filename),
     }
 
 
-# ── Generate: QP mode (multiple QPs answered from combined notes) ─────────────
+# ── Generate: QP mode ─────────────────────────────────────────────────────────
 
 @app.post("/generate/qp-answers")
 async def generate_qp_answers(body: dict):
-    notes_files = body.get("notes_files", [])   # list of filenames
-    qp_files    = body.get("qp_files",    [])   # list of filenames
+    notes_files = body.get("notes_files", [])
+    qp_files    = body.get("qp_files",    [])
 
     if not notes_files:
         raise HTTPException(400, "At least one notes file is required.")
@@ -102,7 +134,7 @@ async def generate_qp_answers(body: dict):
     if not notes_text.strip():
         raise HTTPException(422, "Could not read notes files.")
 
-    # Answer each QP separately, tag with source filename
+    # Answer each QP separately
     all_items = []
     for qp_name in qp_files:
         try:
@@ -116,17 +148,21 @@ async def generate_qp_answers(body: dict):
     if not all_items:
         raise HTTPException(500, "AI returned no results.")
 
-    return {"mode": "qp", "items": all_items, "total": len(all_items)}
+    return {
+        "mode":  "qp",
+        "items": all_items,
+        "total": len(all_items),
+    }
 
 
-# ── Generate: possible questions from combined notes ──────────────────────────
+# ── Generate: possible questions ──────────────────────────────────────────────
 
 @app.post("/generate/possible-questions")
 async def generate_possible(body: dict):
     notes_files = body.get("notes_files", [])
-    difficulty  = body.get("difficulty", "medium")
-    marks       = body.get("marks", 3)
-    count       = body.get("count", 10)          # ← add this
+    difficulty  = body.get("difficulty",  "medium")
+    marks       = body.get("marks",       3)
+    count       = body.get("count",       5)
 
     if not notes_files:
         raise HTTPException(400, "At least one notes file is required.")
@@ -137,16 +173,21 @@ async def generate_possible(body: dict):
     if not isinstance(count, int) or not (1 <= count <= 20):
         raise HTTPException(400, "count must be between 1 and 20.")
 
+    # Combine all notes into one text
     notes_text = get_combined_text("notes", notes_files, extract_text)
     if not notes_text.strip():
         raise HTTPException(422, "Could not read notes files.")
 
     items = await generate_from_notes(notes_text, difficulty, marks, count)
     if not items:
-        raise HTTPException(500, "AI returned no questions.")
+        raise HTTPException(500, "AI returned no questions. Try a different PDF.")
 
-    return {"mode": "generated", "difficulty": difficulty,
-            "marks": marks, "items": items}
+    return {
+        "mode":       "generated",
+        "difficulty": difficulty,
+        "marks":      marks,
+        "items":      items,
+    }
 
 
 # ── Download PDF ──────────────────────────────────────────────────────────────
@@ -155,13 +196,19 @@ async def generate_possible(body: dict):
 async def download_pdf(body: dict):
     items = body.get("items", [])
     title = body.get("title", "Reviso Study Sheet")
-    mode  = body.get("mode", "qp")
+    mode  = body.get("mode",  "qp")
+
     if not items:
         raise HTTPException(400, "No items to export.")
+
     out = Path("outputs") / "reviso_sheet.pdf"
     build_pdf(items, str(out), title, mode)
-    return FileResponse(str(out), media_type="application/pdf",
-                        filename="reviso_sheet.pdf")
+
+    return FileResponse(
+        str(out),
+        media_type="application/pdf",
+        filename="reviso_sheet.pdf",
+    )
 
 
 if __name__ == "__main__":
