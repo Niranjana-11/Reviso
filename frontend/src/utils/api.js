@@ -1,6 +1,5 @@
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000"
 
-// ── Wake up Render silently ───────────────────────────────────────────────────
 export async function wakeUpBackend() {
   try {
     await fetch(`${BASE}/`, {
@@ -8,12 +7,11 @@ export async function wakeUpBackend() {
       signal: AbortSignal.timeout(5000),
     })
   } catch {
-    // ignore — just trying to wake it up
+    // ignore
   }
 }
 
-// ── Core request with auto-retry ──────────────────────────────────────────────
-async function req(path, opts = {}, retries = 2) {
+async function req(path, opts = {}, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const res = await fetch(`${BASE}${path}`, opts)
@@ -24,23 +22,21 @@ async function req(path, opts = {}, retries = 2) {
       return res
     } catch (e) {
       const isLastAttempt = attempt === retries
-      const isFetchError  = e.message === "Failed to fetch"
-        || e.message.includes("fetch")
-        || e.message.includes("network")
-        || e.message.includes("NetworkError")
+      const isFetchError  =
+        e.message === "Failed to fetch" ||
+        e.message.includes("fetch") ||
+        e.message.includes("network") ||
+        e.message.includes("NetworkError")
 
       if (isFetchError && !isLastAttempt) {
-        // Wait 35 seconds then retry — Render is waking up
-        await new Promise(r => setTimeout(r, 35000))
+        // Wait then retry
+        await new Promise(r => setTimeout(r, 15000))
         continue
       }
-
       throw e
     }
   }
 }
-
-// ── Upload endpoints ──────────────────────────────────────────────────────────
 
 export const uploadNotes = (file) => {
   const f = new FormData()
@@ -55,8 +51,6 @@ export const uploadQP = (file) => {
   return req("/upload/qp", { method: "POST", body: f })
     .then(r => r.json())
 }
-
-// ── Generate endpoints ────────────────────────────────────────────────────────
 
 export const generateQPAnswers = (notesFiles, qpFiles) =>
   req("/generate/qp-answers", {
@@ -79,8 +73,6 @@ export const generatePossible = (notesFiles, difficulty, marks, count) =>
       count,
     }),
   }).then(r => r.json())
-
-// ── Download PDF ──────────────────────────────────────────────────────────────
 
 export const downloadPDF = async (items, title, mode) => {
   const res = await req("/download/pdf", {
