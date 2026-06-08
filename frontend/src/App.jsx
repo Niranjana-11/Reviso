@@ -1,12 +1,13 @@
-import { useReviso }    from "./hooks/useReviso"
-import { useTheme }     from "./hooks/useTheme"
-import Header           from "./components/Header"
-import DropZone         from "./components/DropZone"
-import ModeControls     from "./components/ModeControls"
-import QuestionCard     from "./components/QuestionCard"
-import ErrorBanner      from "./components/ErrorBanner"
-import HistoryPopup     from "./components/HistoryPopup"
-import FileList from "./components/FileList"
+import { useReviso }      from "./hooks/useReviso"
+import { useTheme }       from "./hooks/useTheme"
+import Header             from "./components/Header"
+import DropZone           from "./components/DropZone"
+import FileList           from "./components/FileList"
+import ModeControls       from "./components/ModeControls"
+import QuestionCard       from "./components/QuestionCard"
+import ErrorBanner        from "./components/ErrorBanner"
+import HistoryPopup       from "./components/HistoryPopup"
+import BackendStatus      from "./components/BackendStatus"
 
 const SPINNER = (
   <span style={{
@@ -90,7 +91,11 @@ export default function App() {
         .btn-ghost:hover { background: var(--bg-mode); }
       `}</style>
 
+      {/* Header */}
       <Header step={R.step} theme={theme} onToggleTheme={toggle} />
+
+      {/* Backend wake-up status banner */}
+      <BackendStatus />
 
       <main style={{ maxWidth: 820, margin: "0 auto", padding: "26px 18px" }}>
         <ErrorBanner msg={R.error} />
@@ -128,51 +133,55 @@ export default function App() {
               busy={R.uploading.qp}
               onFiles={R.handleQPUpload}
               onRemove={R.removeQPFile}
-  />
-</div>
+            />
+          </div>
 
           {/* Mode controls — only when no QP uploaded */}
-            {!R.qpFiles.length && (
-              <ModeControls
-                difficulty={R.difficulty}
-                setDifficulty={R.setDifficulty}
-                marks={R.marks}
-                setMarks={R.setMarks}
-                count={R.count}
-                setCount={R.setCount}
-                disabled={!R.notesFiles.length || R.generating}
-              />
-            )}
+          {!R.qpFiles.length && (
+            <ModeControls
+              difficulty={R.difficulty}
+              setDifficulty={R.setDifficulty}
+              marks={R.marks}
+              setMarks={R.setMarks}
+              count={R.count}
+              setCount={R.setCount}
+              disabled={!R.notesFiles.length || R.generating}
+            />
+          )}
 
-            {/* Mode indicator */}
-            {R.notesFiles.length > 0 && (
-              <div style={{
-                marginTop: 14, padding: "10px 14px",
-                borderRadius: 10,
-                background: R.qpFiles.length ? "var(--bg-zone-done)" : "var(--bg-mode)",
-                border: `1px solid ${R.qpFiles.length ? "var(--border-main)" : "#bbf7d0"}`,
-                fontSize: 12.5,
-                color: R.qpFiles.length ? "#2563eb" : "#15803d",
-                fontWeight: 600,
-              }}>
-                {R.qpFiles.length
-                  ? `📝 Mode: Reviso will answer ${R.qpFiles.length} QP${R.qpFiles.length > 1 ? "s" : ""} using ${R.notesFiles.length} notes file${R.notesFiles.length > 1 ? "s" : ""}.`
-                  : `✨ Mode: Reviso will generate ${R.marks === 7 ? "7–8 mark" : "3 mark"} ${R.difficulty} questions from ${R.notesFiles.length} notes file${R.notesFiles.length > 1 ? "s" : ""}.`}
-              </div>
-            )}
+          {/* Mode indicator */}
+          {R.notesFiles.length > 0 && (
+            <div style={{
+              marginTop: 14, padding: "10px 14px",
+              borderRadius: 10,
+              background: R.qpFiles.length
+                ? "var(--bg-zone-done)"
+                : "var(--bg-mode)",
+              border: `1px solid ${R.qpFiles.length
+                ? "var(--border-main)"
+                : "#bbf7d0"}`,
+              fontSize: 12.5,
+              color: R.qpFiles.length ? "#2563eb" : "#15803d",
+              fontWeight: 600,
+            }}>
+              {R.qpFiles.length
+                ? `📝 Mode: AI will answer ${R.qpFiles.length} QP${R.qpFiles.length > 1 ? "s" : ""} using ${R.notesFiles.length} notes file${R.notesFiles.length > 1 ? "s" : ""}.`
+                : `✨ Mode: AI will generate ${R.marks === 7 ? "7–8 mark" : "3 mark"} ${R.difficulty} questions from ${R.notesFiles.length} notes file${R.notesFiles.length > 1 ? "s" : ""}.`}
+            </div>
+          )}
         </div>
 
         {/* ── STEP 2: Generate ───────────────────────────────────────── */}
         <div className="card">
           <SectionLabel
             n={2} active={R.step >= 2} done={R.step > 2}
-            title="Generate"
+            title="Generate with AI"
           />
           <p style={{
             fontSize: 13, color: "var(--text-body)",
             marginBottom: 16, marginTop: 4,
           }}>
-              Click the generate button and let Reviso work its magic!💫 It will read your notes, understand the content, and then either answer the questions from your uploaded paper or create new questions based on the mode you selected. This may take a minute, so grab a cup of tea! ☕  
+            Powered by <strong>Groq Llama 3</strong> — free and extremely fast.
           </p>
           <button
             className="btn btn-blue"
