@@ -9,7 +9,7 @@
 [![Backend](https://img.shields.io/badge/Backend-Render-blue?style=for-the-badge&logo=render)](https://reviso-backend-y07n.onrender.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-![Reviso Screenshot](https://via.placeholder.com/800x400?text=Reviso+Screenshot)
+![Reviso Screenshot](Reviso.png)
 
 </div>
 
