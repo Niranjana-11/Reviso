@@ -60,6 +60,9 @@ export default function QuestionCard({ item, index, checked, onToggle }) {
             {item.source === "generated" && (
               <Chip bg="#f0f9ff" color="#0369a1">✨ AI Generated</Chip>
             )}
+            {item.note_source && item.source === "generated" && (
+              <Chip bg="#fef3c7" color="#92400e">📋 {item.note_source}</Chip>
+            )}
             {item.difficulty && (
               <Chip bg={diff.bg} color={diff.color}>{item.difficulty}</Chip>
             )}
@@ -69,6 +72,7 @@ export default function QuestionCard({ item, index, checked, onToggle }) {
             {item.topic && (
               <Chip bg="#f5f3ff" color="#6d28d9">📌 {item.topic}</Chip>
             )}
+            
           </div>
 
           {/* Question text */}

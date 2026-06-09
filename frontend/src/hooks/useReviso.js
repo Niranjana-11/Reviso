@@ -96,6 +96,19 @@ export function useReviso() {
     setQpFiles(prev    => prev.filter(f => f.filename !== filename))
   }, [])
 
+  // ── Reset to upload new files after generating ────────────────────────────
+const resetForNewUpload = useCallback(() => {
+    setNotesFileObjs([])
+    setQpFileObjs([])
+    setNotesFiles([])
+    setQpFiles([])
+    setItems([])
+    setSelected({})
+    setMode(null)
+    setStep(1)
+    clearError()
+  }, [])
+
   // ── Generate — uploads + generates in ONE request ─────────────────────────
   const handleGenerate = useCallback(async () => {
     if (!notesFileObjs.length) {
@@ -199,6 +212,6 @@ export function useReviso() {
     handleGenerate, toggle, selectAll, handleExport,
 
     // History restore
-    setItems, setMode, setTitle, setSelected, setStep,
+    setItems, setMode, setTitle, setSelected, setStep,resetForNewUpload,
   }
 }

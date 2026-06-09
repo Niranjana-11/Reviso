@@ -3,7 +3,6 @@ qa_engine.py
 Two modes:
   A) answer_from_qp   — reads QP questions, answers them using notes text
   B) generate_from_notes — creates possible exam questions from notes
-                           filtered by difficulty, marks, and count
 """
 
 import os
@@ -33,7 +32,6 @@ def _trim(text: str, limit: int = MAX_WORDS) -> str:
 
 
 def _parse_json(raw: str) -> list[dict]:
-    """Safely extract a JSON array from model output."""
     raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
     try:
         data = json.loads(raw)
@@ -67,17 +65,35 @@ async def _call(system: str, user: str) -> str:
     return resp.choices[0].message.content
 
 
-# ── Mode A ────────────────────────────────────────────────────────────────────
+# ── Mode A — Answer QP questions from notes ───────────────────────────────────
 
-async def answer_from_qp(qp_text: str, notes_text: str, qp_name: str = "QP") -> list[dict]:
+async def answer_from_qp(
+    qp_text: str,
+    notes_text: str,
+    qp_name: str = "QP"
+) -> list[dict]:
     """
     Extract every question from the QP and answer each one
-    strictly using the provided notes text.
+    using the provided notes. Detects marks and writes
+    appropriately detailed answers.
     """
-    system = """You are a precise exam answer writer.
+    system = """You are a precise and detailed exam answer writer.
+
 Extract every question from the question paper.
 Answer each one using ONLY the study notes provided.
-If a question cannot be answered from the notes, write: Not covered in the provided notes.
+
+CRITICAL ANSWER LENGTH RULES:
+- For 3-mark questions: Write 4-6 sentences. Clear and concise.
+- For 7 or 8-mark questions: Write a VERY DETAILED answer with:
+    * A clear introduction/definition
+    * Explanation of all key concepts with examples
+    * Diagrams described in text if needed
+    * Comparisons or classifications where relevant
+    * A conclusion
+    * Minimum 150-200 words for 7-8 mark questions
+- If marks are not specified, write a medium length answer (5-8 sentences)
+- If a question cannot be answered from the notes, write: Not covered in the provided notes.
+
 Return ONLY a raw JSON array. No explanation. No markdown.
 Each object: { "question": "...", "answer": "...", "marks": <number or null>, "topic": "..." }"""
 
@@ -87,7 +103,7 @@ Each object: { "question": "...", "answer": "...", "marks": <number or null>, "t
 STUDY NOTES:
 {_trim(notes_text, 3000)}
 
-Return ONLY a JSON array."""
+Return ONLY a JSON array with detailed answers based on marks weightage."""
 
     raw   = await _call(system, user)
     items = _parse_json(raw)
@@ -110,22 +126,35 @@ Return ONLY a JSON array."""
     return result
 
 
-# ── Mode B ────────────────────────────────────────────────────────────────────
+# ── Mode B — Generate questions per note file ─────────────────────────────────
 
 async def generate_from_notes(
     notes_text: str,
     difficulty: str,
     marks: int,
     count: int = 5,
+    note_name: str = "",
 ) -> list[dict]:
     """
-    Generate exactly `count` possible exam questions from notes,
-    matching the requested difficulty and mark weightage.
+    Generate exactly `count` questions from notes.
+    Answers are detailed based on marks weightage.
     """
-    marks_desc = {
-        3: "short answer (3 to 5 sentences, concise, 3 marks each)",
-        7: "long answer essay style (detailed with points, 7 to 8 marks each)",
-    }[marks]
+    if marks == 7:
+        marks_desc = (
+            "long answer / essay style questions worth 7-8 marks each. "
+            "Each answer MUST be very detailed with: "
+            "1) A clear definition/introduction "
+            "2) Detailed explanation of all concepts "
+            "3) Real-world examples "
+            "4) Classifications or comparisons where applicable "
+            "5) A summary/conclusion. "
+            "Minimum 200 words per answer."
+        )
+    else:
+        marks_desc = (
+            "short answer questions worth 3 marks each. "
+            "Each answer should be 4-6 clear sentences covering the key points."
+        )
 
     diff_desc = {
         "easy":   "straightforward recall and definition questions",
@@ -133,27 +162,26 @@ async def generate_from_notes(
         "hard":   "analysis, comparison, and critical thinking questions",
     }[difficulty]
 
+    note_context = f" from the notes titled '{note_name}'" if note_name else ""
+
     system = f"""You are an expert exam question setter.
 
-YOUR MOST IMPORTANT RULE: Generate EXACTLY {count} question(s) — no more, no less.
-If the user asks for 1 question, return exactly 1 item in the array.
-If they ask for 15, return exactly 15 items. Never decide the count yourself.
+YOUR MOST IMPORTANT RULES:
+1. Generate EXACTLY {count} questions{note_context} — no more, no less.
+2. Question type: {marks_desc}
+3. Difficulty: {diff_desc}
+4. Base ALL answers strictly on the provided notes only.
+5. For {marks}-mark questions, answers MUST match the length and detail described above.
+6. Include the note source name in the topic field.
 
-Question type: {marks_desc}
-Difficulty: {diff_desc}
-Base all answers strictly on the provided notes only.
+Return ONLY a raw JSON array. No explanation. No markdown.
+Each object: {{ "question": "...", "answer": "...", "marks": {marks}, "difficulty": "{difficulty}", "topic": "...", "note_source": "{note_name}" }}"""
 
-Return ONLY a raw JSON array. No explanation. No markdown. No extra text.
-Each object must have:
-{{ "question": "...", "answer": "...", "marks": {marks}, "difficulty": "{difficulty}", "topic": "..." }}"""
-
-    user = f"""STUDY NOTES:
+    user = f"""STUDY NOTES{f" ({note_name})" if note_name else ""}:
 {_trim(notes_text, 5000)}
 
-IMPORTANT: Return EXACTLY {count} question(s) in a JSON array.
-Difficulty: {difficulty}
-Marks per question: {marks}
-Return ONLY the JSON array with exactly {count} item(s). Nothing else."""
+Generate EXACTLY {count} questions at {difficulty} level worth {marks} marks each.
+Return ONLY a JSON array with exactly {count} items."""
 
     raw   = await _call(system, user)
     items = _parse_json(raw)
@@ -165,15 +193,15 @@ Return ONLY the JSON array with exactly {count} item(s). Nothing else."""
         if not q or not a:
             continue
         result.append({
-            "id":         f"gen{i+1}",
-            "question":   q,
-            "answer":     a,
-            "marks":      marks,
-            "difficulty": difficulty,
-            "topic":      item.get("topic", ""),
-            "source":     "generated",
+            "id":          f"gen_{note_name}_{i+1}" if note_name else f"gen{i+1}",
+            "question":    q,
+            "answer":      a,
+            "marks":       marks,
+            "difficulty":  difficulty,
+            "topic":       item.get("topic", ""),
+            "note_source": note_name,
+            "source":      "generated",
         })
-        # Hard cap — never exceed what user asked for
         if len(result) >= count:
             break
 

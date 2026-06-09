@@ -221,6 +221,13 @@ export default function App() {
                 >
                   None
                 </button>
+                <button
+                  className="btn btn-ghost"
+                  onClick={R.resetForNewUpload}
+                  style={{ color: "#16a34a", borderColor: "#16a34a" }}
+                >
+                  ➕ New Upload
+                </button>
               </div>
             </div>
 
