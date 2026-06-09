@@ -6,9 +6,7 @@ export async function wakeUpBackend() {
       method: "GET",
       signal: AbortSignal.timeout(5000),
     })
-  } catch {
-    // ignore
-  }
+  } catch { }
 }
 
 async function req(path, opts = {}, retries = 3) {
@@ -25,11 +23,9 @@ async function req(path, opts = {}, retries = 3) {
       const isFetchError  =
         e.message === "Failed to fetch" ||
         e.message.includes("fetch") ||
-        e.message.includes("network") ||
-        e.message.includes("NetworkError")
+        e.message.includes("network")
 
       if (isFetchError && !isLastAttempt) {
-        // Wait then retry
         await new Promise(r => setTimeout(r, 15000))
         continue
       }
@@ -38,41 +34,28 @@ async function req(path, opts = {}, retries = 3) {
   }
 }
 
-export const uploadNotes = (file) => {
-  const f = new FormData()
-  f.append("file", file)
-  return req("/upload/notes", { method: "POST", body: f })
-    .then(r => r.json())
+// ── Extract text from PDF in browser ─────────────────────────────────────────
+// We send the raw file and let backend extract + generate in ONE request
+// This avoids the memory problem entirely
+
+export const uploadAndGenerate = async (
+  notesFiles,   // array of File objects
+  qpFiles,      // array of File objects  
+  difficulty,
+  marks,
+  count,
+) => {
+  const form = new FormData()
+
+  notesFiles.forEach(f => form.append("notes_files", f))
+  qpFiles.forEach(f   => form.append("qp_files",    f))
+  form.append("difficulty", difficulty)
+  form.append("marks",      String(marks))
+  form.append("count",      String(count))
+
+  const res = await req("/generate/all", { method: "POST", body: form })
+  return res.json()
 }
-
-export const uploadQP = (file) => {
-  const f = new FormData()
-  f.append("file", file)
-  return req("/upload/qp", { method: "POST", body: f })
-    .then(r => r.json())
-}
-
-export const generateQPAnswers = (notesFiles, qpFiles) =>
-  req("/generate/qp-answers", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      notes_files: notesFiles,
-      qp_files:    qpFiles,
-    }),
-  }).then(r => r.json())
-
-export const generatePossible = (notesFiles, difficulty, marks, count) =>
-  req("/generate/possible-questions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      notes_files: notesFiles,
-      difficulty,
-      marks,
-      count,
-    }),
-  }).then(r => r.json())
 
 export const downloadPDF = async (items, title, mode) => {
   const res = await req("/download/pdf", {

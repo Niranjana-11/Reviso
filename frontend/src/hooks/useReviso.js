@@ -1,19 +1,16 @@
 import { useState, useCallback, useEffect } from "react"
-import {
-  uploadNotes, uploadQP,
-  generateQPAnswers, generatePossible,
-  downloadPDF, wakeUpBackend,
-} from "../utils/api"
+import { uploadAndGenerate, downloadPDF, wakeUpBackend } from "../utils/api"
 import { saveSession } from "../utils/supabase"
 
 export function useReviso() {
 
-  // ── Files ─────────────────────────────────────────────────────────────────
-  const [notesFiles, setNotesFiles] = useState([])  // [{ filename, converted }]
-  const [qpFiles,    setQpFiles]    = useState([])  // [{ filename, converted }]
+  // ── Raw File objects (not yet uploaded) ───────────────────────────────────
+  const [notesFileObjs, setNotesFileObjs] = useState([]) // File[]
+  const [qpFileObjs,    setQpFileObjs]    = useState([]) // File[]
 
-  // ── Upload status ─────────────────────────────────────────────────────────
-  const [uploading, setUploading] = useState({ notes: false, qp: false })
+  // ── Display info ──────────────────────────────────────────────────────────
+  const [notesFiles, setNotesFiles] = useState([]) // [{filename, converted}]
+  const [qpFiles,    setQpFiles]    = useState([]) // [{filename, converted}]
 
   // ── Mode B controls ───────────────────────────────────────────────────────
   const [difficulty, setDifficulty] = useState("medium")
@@ -32,94 +29,77 @@ export function useReviso() {
   const [error, setError] = useState("")
   const [title, setTitle] = useState("Reviso Study Sheet")
 
-  // ── Wake up Render as soon as app loads ───────────────────────────────────
-  useEffect(() => {
-    wakeUpBackend()
-  }, [])
+  // ── Wake up Render on load ────────────────────────────────────────────────
+  useEffect(() => { wakeUpBackend() }, [])
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   const showError  = (msg) => setError(msg)
   const clearError = ()    => setError("")
 
-  // ── Upload multiple notes files ───────────────────────────────────────────
-  const handleNotesUpload = useCallback(async (fileArray) => {
+  // ── Add notes files (no upload yet) ──────────────────────────────────────
+  const handleNotesUpload = useCallback((fileArray) => {
     const valid = fileArray.filter(f => {
       const n = f.name.toLowerCase()
       return n.endsWith(".pdf") || n.endsWith(".pptx")
     })
     if (!valid.length) return showError("Only PDF or PPTX files accepted.")
-
     clearError()
-    setUploading(u => ({ ...u, notes: true }))
 
-    for (const file of valid) {
-      try {
-        const data = await uploadNotes(file)
-        setNotesFiles(prev => {
-          if (prev.find(f => f.filename === data.filename)) return prev
-          return [...prev, {
-            filename:  data.filename,
-            converted: !!data.converted,
-          }]
-        })
-      } catch (e) {
-        if (e.message.includes("fetch")) {
-          showError("Server is waking up ☕ — retrying automatically, please wait...")
-        } else {
-          showError(`Failed to upload ${file.name}: ${e.message}`)
-        }
-      }
-    }
-
-    setUploading(u => ({ ...u, notes: false }))
+    setNotesFileObjs(prev => {
+      const names = new Set(prev.map(f => f.name))
+      return [...prev, ...valid.filter(f => !names.has(f.name))]
+    })
+    setNotesFiles(prev => {
+      const names = new Set(prev.map(f => f.filename))
+      const newOnes = valid
+        .filter(f => !names.has(f.name))
+        .map(f => ({
+          filename:  f.name,
+          converted: f.name.toLowerCase().endsWith(".pptx"),
+        }))
+      return [...prev, ...newOnes]
+    })
   }, [])
 
-  // ── Upload multiple QP files ──────────────────────────────────────────────
-  const handleQPUpload = useCallback(async (fileArray) => {
+  // ── Add QP files (no upload yet) ─────────────────────────────────────────
+  const handleQPUpload = useCallback((fileArray) => {
     const valid = fileArray.filter(f => {
       const n = f.name.toLowerCase()
       return n.endsWith(".pdf") || n.endsWith(".pptx")
     })
     if (!valid.length) return showError("Only PDF or PPTX files accepted.")
-
     clearError()
-    setUploading(u => ({ ...u, qp: true }))
 
-    for (const file of valid) {
-      try {
-        const data = await uploadQP(file)
-        setQpFiles(prev => {
-          if (prev.find(f => f.filename === data.filename)) return prev
-          return [...prev, {
-            filename:  data.filename,
-            converted: !!data.converted,
-          }]
-        })
-      } catch (e) {
-        if (e.message.includes("fetch")) {
-          showError("Server is waking up ☕ — retrying automatically, please wait...")
-        } else {
-          showError(`Failed to upload ${file.name}: ${e.message}`)
-        }
-      }
-    }
-
-    setUploading(u => ({ ...u, qp: false }))
+    setQpFileObjs(prev => {
+      const names = new Set(prev.map(f => f.name))
+      return [...prev, ...valid.filter(f => !names.has(f.name))]
+    })
+    setQpFiles(prev => {
+      const names = new Set(prev.map(f => f.filename))
+      const newOnes = valid
+        .filter(f => !names.has(f.name))
+        .map(f => ({
+          filename:  f.name,
+          converted: f.name.toLowerCase().endsWith(".pptx"),
+        }))
+      return [...prev, ...newOnes]
+    })
   }, [])
 
-  // ── Remove individual files ───────────────────────────────────────────────
+  // ── Remove files ──────────────────────────────────────────────────────────
   const removeNotesFile = useCallback((filename) => {
-    setNotesFiles(prev => prev.filter(f => f.filename !== filename))
+    setNotesFileObjs(prev => prev.filter(f => f.name !== filename))
+    setNotesFiles(prev    => prev.filter(f => f.filename !== filename))
   }, [])
 
   const removeQPFile = useCallback((filename) => {
-    setQpFiles(prev => prev.filter(f => f.filename !== filename))
+    setQpFileObjs(prev => prev.filter(f => f.name !== filename))
+    setQpFiles(prev    => prev.filter(f => f.filename !== filename))
   }, [])
 
-  // ── Generate ──────────────────────────────────────────────────────────────
+  // ── Generate — uploads + generates in ONE request ─────────────────────────
   const handleGenerate = useCallback(async () => {
-    if (!notesFiles.length) {
-      return showError("Please upload at least one notes file.")
+    if (!notesFileObjs.length) {
+      return showError("Please add at least one notes file.")
     }
     clearError()
     setGenerating(true)
@@ -128,24 +108,17 @@ export function useReviso() {
     setSelected({})
 
     try {
-      const notesNames = notesFiles.map(f => f.filename)
-      const qpNames    = qpFiles.map(f => f.filename)
-      let data
+      const data = await uploadAndGenerate(
+        notesFileObjs,
+        qpFileObjs,
+        difficulty,
+        marks,
+        count,
+      )
 
-      if (qpNames.length > 0) {
-        // Mode A — answer QP questions from notes
-        data = await generateQPAnswers(notesNames, qpNames)
-        setMode("qp")
-      } else {
-        // Mode B — generate possible questions
-        data = await generatePossible(notesNames, difficulty, marks, count)
-        setMode("generated")
-      }
-
-      // Set results
+      setMode(data.mode)
       setItems(data.items)
 
-      // Pre-select all questions
       const sel = {}
       data.items.forEach(q => (sel[q.id] = true))
       setSelected(sel)
@@ -156,9 +129,9 @@ export function useReviso() {
         id:         Date.now().toString(),
         title:      title || "Reviso Session",
         date:       new Date().toISOString(),
-        mode:       qpNames.length > 0 ? "qp" : "generated",
-        difficulty: qpNames.length > 0 ? null : difficulty,
-        marks:      qpNames.length > 0 ? null : marks,
+        mode:       data.mode,
+        difficulty: data.mode === "qp" ? null : difficulty,
+        marks:      data.mode === "qp" ? null : marks,
         items:      data.items,
       })
 
@@ -172,14 +145,13 @@ export function useReviso() {
     }
 
     setGenerating(false)
-  }, [notesFiles, qpFiles, difficulty, marks, count, title])
+  }, [notesFileObjs, qpFileObjs, difficulty, marks, count, title])
 
-  // ── Toggle single question ────────────────────────────────────────────────
+  // ── Toggle / select ───────────────────────────────────────────────────────
   const toggle = useCallback((id) => {
     setSelected(s => ({ ...s, [id]: !s[id] }))
   }, [])
 
-  // ── Select / deselect all ─────────────────────────────────────────────────
   const selectAll = useCallback((ids, val) => {
     setSelected(s => {
       const next = { ...s }
@@ -197,46 +169,36 @@ export function useReviso() {
     try {
       await downloadPDF(chosen, title, mode)
     } catch (e) {
-      if (e.message.includes("fetch")) {
-        showError("Server is waking up ☕ — please wait 30 seconds and try again!")
-      } else {
-        showError(e.message)
-      }
+      showError(e.message)
     }
     setExporting(false)
   }, [items, selected, title, mode])
 
-  // ── Derived ───────────────────────────────────────────────────────────────
   const selectedCount = Object.values(selected).filter(Boolean).length
 
-  // ── Return everything ─────────────────────────────────────────────────────
   return {
-    // Files
+    // Files for display
     notesFiles, qpFiles,
-    uploading,
+    uploading: { notes: false, qp: false }, // no separate upload step
 
-    // Mode B controls
+    // Controls
     difficulty, setDifficulty,
     marks,      setMarks,
     count,      setCount,
 
     // Results
-    items,      selected,
-    mode,       generating,
-    exporting,  selectedCount,
+    items, selected, mode,
+    generating, exporting, selectedCount,
 
     // UI
-    step,  error,
-    title, setTitle,
+    step, error, title, setTitle,
 
     // Actions
     handleNotesUpload, handleQPUpload,
     removeNotesFile,   removeQPFile,
-    handleGenerate,
-    toggle,    selectAll,
-    handleExport,
+    handleGenerate, toggle, selectAll, handleExport,
 
-    // For history restore
+    // History restore
     setItems, setMode, setTitle, setSelected, setStep,
   }
 }
