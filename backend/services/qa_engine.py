@@ -1,8 +1,10 @@
 """
 qa_engine.py
 Two modes:
-  A) answer_from_qp   — reads QP questions, answers them using notes text
-  B) generate_from_notes — creates possible exam questions from notes
+  A) answer_from_qp      — reads QP questions, answers them using notes,
+                           cites page numbers from notes
+  B) generate_from_notes — creates possible exam questions per notes file,
+                           tagged with note source name
 """
 
 import os
@@ -28,10 +30,12 @@ MAX_WORDS = 5000
 
 
 def _trim(text: str, limit: int = MAX_WORDS) -> str:
+    """Return first `limit` words of text."""
     return " ".join(text.split()[:limit])
 
 
 def _parse_json(raw: str) -> list[dict]:
+    """Safely extract a JSON array from model output."""
     raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
     try:
         data = json.loads(raw)
@@ -53,6 +57,7 @@ def _parse_json(raw: str) -> list[dict]:
 
 
 async def _call(system: str, user: str) -> str:
+    """Send a message to Groq AI and return the response text."""
     resp = await _groq().chat.completions.create(
         model=MODEL,
         messages=[
@@ -65,7 +70,7 @@ async def _call(system: str, user: str) -> str:
     return resp.choices[0].message.content
 
 
-# ── Mode A — Answer QP questions from notes ───────────────────────────────────
+# ── Mode A — Answer QP questions from notes with page references ──────────────
 
 async def answer_from_qp(
     qp_text: str,
@@ -74,41 +79,55 @@ async def answer_from_qp(
 ) -> list[dict]:
     """
     Extract every question from the QP and answer each one
-    using the provided notes. Cites page numbers from notes.
+    using the provided notes text.
+    Notes are tagged with [PAGE X] markers so AI can cite
+    exact page numbers in its answers.
     """
     system = """You are a precise and detailed exam answer writer.
 
 Extract every question from the question paper.
 Answer each one using ONLY the study notes provided.
 
-The notes are tagged with page numbers like [PAGE 1], [PAGE 2] etc.
-You MUST cite the page number(s) where the answer can be found in the notes.
-Add the page reference at the END of each answer in this exact format:
-📄 Refer: Page X  (or  📄 Refer: Pages X, Y  if answer spans multiple pages)
+The notes contain page markers like [PAGE 1], [PAGE 2] etc.
+You MUST identify which page(s) the answer content comes from
+and include the page reference at the END of each answer in this exact format:
+📄 Refer: Page X
+or if the answer spans multiple pages:
+📄 Refer: Pages X, Y
 
 CRITICAL ANSWER LENGTH RULES:
-- For 3-mark questions: Write 4-6 sentences. Clear and concise.
-- For 7 or 8-mark questions: Write a VERY DETAILED answer with:
-    * A clear introduction/definition
-    * Detailed explanation of all key concepts with examples
+- For 3-mark questions:
+    Write 4-6 clear sentences. Concise and direct.
+- For 7 or 8-mark questions:
+    Write a VERY DETAILED structured answer with:
+    * Clear introduction / definition
+    * Detailed explanation of ALL key concepts
+    * Real-world examples
     * Comparisons or classifications where relevant
-    * A conclusion
+    * Summary / conclusion
     * Minimum 200 words
-- If marks are not visible, write a medium length answer (5-8 sentences)
-- If a question cannot be answered from the notes, write:
+- If marks are not visible, write a medium-length answer (5-8 sentences)
+- If a question cannot be answered from the notes, write exactly:
   Not covered in the provided notes.
 
-Return ONLY a raw JSON array. No explanation. No markdown.
-Each object must have:
-{ "question": "...", "answer": "...", "marks": <number or null>, "topic": "...", "pages": "Page X" }"""
+Return ONLY a raw JSON array. No explanation. No markdown. No extra text.
+Each object must have exactly these fields:
+{
+  "question": "...",
+  "answer": "...",
+  "marks": <number or null>,
+  "topic": "...",
+  "pages": "Page X"
+}"""
 
     user = f"""QUESTION PAPER:
 {_trim(qp_text, 2000)}
 
-STUDY NOTES (with page numbers):
+STUDY NOTES (with page numbers — cite them in your answers):
 {_trim(notes_text, 3000)}
 
-For each answer, cite the page number(s) from the notes where this topic appears.
+Answer every question from the QP using only the notes above.
+At the end of each answer, add: 📄 Refer: Page X
 Return ONLY a JSON array."""
 
     raw   = await _call(system, user)
@@ -133,7 +152,7 @@ Return ONLY a JSON array."""
     return result
 
 
-# ── Mode B — Generate questions per note file ─────────────────────────────────
+# ── Mode B — Generate questions per notes file ────────────────────────────────
 
 async def generate_from_notes(
     notes_text: str,
@@ -143,24 +162,25 @@ async def generate_from_notes(
     note_name: str = "",
 ) -> list[dict]:
     """
-    Generate exactly `count` questions from notes.
+    Generate exactly `count` questions from a single notes file.
     Answers are detailed based on marks weightage.
+    Questions are tagged with the note source name.
     """
     if marks == 7:
         marks_desc = (
             "long answer / essay style questions worth 7-8 marks each. "
             "Each answer MUST be very detailed with: "
-            "1) A clear definition/introduction "
-            "2) Detailed explanation of all concepts "
-            "3) Real-world examples "
+            "1) A clear definition / introduction "
+            "2) Detailed explanation of all concepts with examples "
+            "3) Real-world applications "
             "4) Classifications or comparisons where applicable "
-            "5) A summary/conclusion. "
-            "Minimum 200 words per answer."
+            "5) A clear summary / conclusion. "
+            "Minimum 200 words per answer. No shortcuts."
         )
     else:
         marks_desc = (
             "short answer questions worth 3 marks each. "
-            "Each answer should be 4-6 clear sentences covering the key points."
+            "Each answer should be 4-6 clear sentences covering key points concisely."
         )
 
     diff_desc = {
@@ -176,19 +196,27 @@ async def generate_from_notes(
 YOUR MOST IMPORTANT RULES:
 1. Generate EXACTLY {count} questions{note_context} — no more, no less.
 2. Question type: {marks_desc}
-3. Difficulty: {diff_desc}
-4. Base ALL answers strictly on the provided notes only.
-5. For {marks}-mark questions, answers MUST match the length and detail described above.
-6. Include the note source name in the topic field.
+3. Difficulty level: {diff_desc}
+4. Base ALL answers strictly on the provided notes ONLY.
+5. For {marks}-mark questions, answers MUST match the length and detail described.
+6. Include the note name in the topic field so students know the source.
 
-Return ONLY a raw JSON array. No explanation. No markdown.
-Each object: {{ "question": "...", "answer": "...", "marks": {marks}, "difficulty": "{difficulty}", "topic": "...", "note_source": "{note_name}" }}"""
+Return ONLY a raw JSON array. No explanation. No markdown. No extra text.
+Each object must have exactly these fields:
+{{
+  "question": "...",
+  "answer": "...",
+  "marks": {marks},
+  "difficulty": "{difficulty}",
+  "topic": "...",
+  "note_source": "{note_name}"
+}}"""
 
-    user = f"""STUDY NOTES{f" ({note_name})" if note_name else ""}:
+    user = f"""STUDY NOTES{f" — {note_name}" if note_name else ""}:
 {_trim(notes_text, 5000)}
 
-Generate EXACTLY {count} questions at {difficulty} level worth {marks} marks each.
-Return ONLY a JSON array with exactly {count} items."""
+Generate EXACTLY {count} question(s) at {difficulty} level worth {marks} marks each.
+Return ONLY a JSON array with exactly {count} item(s). Nothing else."""
 
     raw   = await _call(system, user)
     items = _parse_json(raw)
@@ -207,8 +235,10 @@ Return ONLY a JSON array with exactly {count} items."""
             "difficulty":  difficulty,
             "topic":       item.get("topic", ""),
             "note_source": note_name,
+            "pages":       "",     # no page ref for generated questions
             "source":      "generated",
         })
+        # Hard cap — never exceed what user asked for
         if len(result) >= count:
             break
 
