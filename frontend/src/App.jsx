@@ -112,7 +112,9 @@ export default function App() {
           }}>
             Your <strong>study notes</strong> are required. Upload a{" "}
             <strong>question paper</strong> if you have one — otherwise Reviso
-            will generate possible exam questions for you.
+            will generate possible exam questions for you.📄 For the best experience, 
+            please upload text-based PDFs instead of scanned PDFs. Reviso's OCR isn't 
+            quite there yet, so scanned documents may not be processed correctly. 🙏
             Accepts <strong>PDF</strong> and <strong>PPTX</strong>.
           </p>
 
