@@ -15,6 +15,7 @@ from services.pdf_extractor  import extract_text
 from services.qa_engine      import answer_from_qp, generate_from_notes
 from services.pdf_builder    import build_pdf
 from services.pptx_converter import pptx_to_pdf
+from services.pdf_extractor import extract_text, extract_text_with_pages
 
 app = FastAPI(title="Reviso", version="5.0.0")
 
@@ -36,8 +37,8 @@ def _is_pptx(filename: str) -> bool:
     return filename.lower().endswith(".pptx")
 
 
-async def _file_to_text(file: UploadFile) -> str:
-    """Read uploaded file and extract all text."""
+async def _file_to_text_with_pages(file: UploadFile) -> str:
+    """Read uploaded file and extract text WITH page numbers."""
     content = await file.read()
     suffix  = ".pptx" if _is_pptx(file.filename) else ".pdf"
 
@@ -49,11 +50,11 @@ async def _file_to_text(file: UploadFile) -> str:
         if _is_pptx(file.filename):
             pdf_path = tmp_path.replace(".pptx", ".pdf")
             pptx_to_pdf(tmp_path, pdf_path)
-            text = extract_text(pdf_path)
+            text = extract_text_with_pages(pdf_path)
             try: os.unlink(pdf_path)
             except: pass
         else:
-            text = extract_text(tmp_path)
+            text = extract_text_with_pages(tmp_path)
     finally:
         try: os.unlink(tmp_path)
         except: pass
@@ -86,15 +87,24 @@ async def generate_all(
     count:       int = Form(default=5),
 ):
     # ── Extract notes — one by one with name ─────────────────────────────
+    
+
+    has_qp = qp_files and any(f.filename for f in qp_files)
+   
     notes_data = []  # list of (name, text)
     for f in notes_files:
         try:
-            text = await _file_to_text(f)
+            # Use page-tagged extraction when answering QP
+            if has_qp:
+                text = await _file_to_text_with_pages(f)
+            else:
+                text = await _file_to_text(f)
             if text.strip():
                 clean = _clean_name(f.filename)
                 notes_data.append((clean, text))
         except Exception as e:
             print(f"Warning: could not read notes {f.filename}: {e}")
+
 
     if not notes_data:
         raise HTTPException(422,

@@ -88,8 +88,13 @@ def build_pdf(items, output_path, title, mode):
             ("LEFTPADDING",   (1, 0), (1, 0), 12),
         ]))
 
+        # Answer text with page reference
+        answer_content = f"<b>Answer:</b>  {item['answer']}"
+        if item.get("pages") and item.get("source") == "qp":
+            answer_content += f"<br/><br/><font color='#2563eb'><b>📄 {item['pages']} in your notes</b></font>"
+
         a_table = Table(
-            [[Paragraph(f"<b>Answer:</b>  {item['answer']}", S["a"])]],
+            [[Paragraph(answer_content, S["a"])]],
             colWidths=["100%"],
         )
         a_table.setStyle(TableStyle([

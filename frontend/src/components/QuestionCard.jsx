@@ -86,19 +86,52 @@ export default function QuestionCard({ item, index, checked, onToggle }) {
             Q{index + 1}. {item.question}
           </div>
 
+          
           {/* Answer text */}
-          <div style={{
-            fontSize: 12.5,
-            color: "var(--text-body)",
-            lineHeight: 1.7,
-            background: "var(--ans-bg)",
-            borderRadius: 8,
-            padding: "9px 12px",
-            borderLeft: "3px solid var(--border-main)",
-          }}>
-            <strong style={{ color: "var(--text-heading)" }}>Answer: </strong>
-            {item.answer}
-          </div>
+            <div style={{
+              fontSize: 12.5,
+              color: "var(--text-body)",
+              lineHeight: 1.7,
+              background: "var(--ans-bg)",
+              borderRadius: 8,
+              padding: "9px 12px",
+              borderLeft: "3px solid #2563eb",
+            }}>
+              <strong style={{ color: "var(--text-heading)" }}>Answer: </strong>
+              {item.answer}
+
+              {/* Page reference — only shown for QP answers */}
+              {item.pages && item.source === "qp" && (
+                <div style={{
+                  marginTop: 8,
+                  paddingTop: 8,
+                  borderTop: "1px dashed var(--border-card)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}>
+                  <span style={{
+                    background: "#dbeafe",
+                    color: "#1d4ed8",
+                    padding: "3px 10px",
+                    borderRadius: 99,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}>
+                    📄 {item.pages}
+                  </span>
+                  <span style={{
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                  }}>
+                    in your notes
+                  </span>
+                </div>
+              )}
+            </div>
         </div>
       </div>
     </div>

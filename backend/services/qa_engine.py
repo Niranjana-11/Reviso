@@ -74,36 +74,42 @@ async def answer_from_qp(
 ) -> list[dict]:
     """
     Extract every question from the QP and answer each one
-    using the provided notes. Detects marks and writes
-    appropriately detailed answers.
+    using the provided notes. Cites page numbers from notes.
     """
     system = """You are a precise and detailed exam answer writer.
 
 Extract every question from the question paper.
 Answer each one using ONLY the study notes provided.
 
+The notes are tagged with page numbers like [PAGE 1], [PAGE 2] etc.
+You MUST cite the page number(s) where the answer can be found in the notes.
+Add the page reference at the END of each answer in this exact format:
+📄 Refer: Page X  (or  📄 Refer: Pages X, Y  if answer spans multiple pages)
+
 CRITICAL ANSWER LENGTH RULES:
 - For 3-mark questions: Write 4-6 sentences. Clear and concise.
 - For 7 or 8-mark questions: Write a VERY DETAILED answer with:
     * A clear introduction/definition
-    * Explanation of all key concepts with examples
-    * Diagrams described in text if needed
+    * Detailed explanation of all key concepts with examples
     * Comparisons or classifications where relevant
     * A conclusion
-    * Minimum 150-200 words for 7-8 mark questions
-- If marks are not specified, write a medium length answer (5-8 sentences)
-- If a question cannot be answered from the notes, write: Not covered in the provided notes.
+    * Minimum 200 words
+- If marks are not visible, write a medium length answer (5-8 sentences)
+- If a question cannot be answered from the notes, write:
+  Not covered in the provided notes.
 
 Return ONLY a raw JSON array. No explanation. No markdown.
-Each object: { "question": "...", "answer": "...", "marks": <number or null>, "topic": "..." }"""
+Each object must have:
+{ "question": "...", "answer": "...", "marks": <number or null>, "topic": "...", "pages": "Page X" }"""
 
     user = f"""QUESTION PAPER:
 {_trim(qp_text, 2000)}
 
-STUDY NOTES:
+STUDY NOTES (with page numbers):
 {_trim(notes_text, 3000)}
 
-Return ONLY a JSON array with detailed answers based on marks weightage."""
+For each answer, cite the page number(s) from the notes where this topic appears.
+Return ONLY a JSON array."""
 
     raw   = await _call(system, user)
     items = _parse_json(raw)
@@ -120,6 +126,7 @@ Return ONLY a JSON array with detailed answers based on marks weightage."""
             "answer":   a,
             "marks":    item.get("marks", None),
             "topic":    item.get("topic", ""),
+            "pages":    item.get("pages", ""),
             "source":   "qp",
             "qp_file":  qp_name,
         })
