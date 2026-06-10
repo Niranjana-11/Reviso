@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ![Reviso Screenshot](Reviso_1.png)
-![Reviso Screenshot](Reviso_1.png)
+![Reviso Screenshot](Reviso_2.png)
 
 </div>
 
