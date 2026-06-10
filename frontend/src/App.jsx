@@ -114,7 +114,8 @@ export default function App() {
             <strong>question paper</strong> if you have one — otherwise Reviso
             will generate possible exam questions for you.📄 For the best experience, 
             please upload text-based PDFs instead of scanned PDFs. Reviso's OCR isn't 
-            quite there yet, so scanned documents may not be processed correctly. 🙏
+            quite there yet, so <strong>scanned documents</strong> may not be <strong>processed correctly</strong>. 🙏
+            
             Accepts <strong>PDF</strong> and <strong>PPTX</strong>.
           </p>
 
