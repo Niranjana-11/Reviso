@@ -10,8 +10,9 @@
 [![GitHub](https://img.shields.io/badge/GitHub-Niranjana--11-181717?style=for-the-badge&logo=github)](https://github.com/Niranjana-11/Reviso)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-![Reviso Screenshot](Reviso_1.png)
 ![Reviso Screenshot](Reviso_2.png)
+![Reviso Screenshot](Reviso_1.png)
+
 
 </div>
 
